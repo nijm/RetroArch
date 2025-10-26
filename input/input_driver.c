@@ -5638,6 +5638,7 @@ static bool input_keys_pressed_other_sources(
  */
 static void input_keys_pressed(
       unsigned port,
+      unsigned hotkey_port,
       bool is_menu,
       unsigned input_hotkey_block_delay,
       input_bits_t *p_new_state,
@@ -5669,7 +5670,8 @@ static void input_keys_pressed(
          && (libretro_hotkey_set || keyboard_hotkey_set))
       libretro_hotkey_set = keyboard_hotkey_set = true;
 
-   if (     binds[port][RARCH_ENABLE_HOTKEY].valid
+   if (     (port == hotkey_port)
+         && (binds_norm->valid || binds_auto->valid)
          && CHECK_INPUT_DRIVER_BLOCK_HOTKEY(binds_norm, binds_auto))
    {
       if (input_state_wrap(
@@ -5803,8 +5805,8 @@ static void input_keys_pressed(
          BIT256_SET_PTR(p_new_state, RARCH_ENABLE_HOTKEY);
    }
 
-   /* Hotkeys are only relevant for first port */
-   if (port > 0)
+   /* Hotkeys are only relevant for the first user or core port */
+   if (port != hotkey_port)
       return;
 
    /* Check hotkeys to block keyboard and joypad hotkeys separately.
@@ -6775,6 +6777,7 @@ void input_driver_collect_system_input(input_driver_state_t *input_st,
    unsigned block_delay                = settings->uints.input_hotkey_block_delay;
    uint8_t max_users                   = settings->uints.input_max_users;
    uint8_t port                        = 0;
+   uint8_t hotkey_port                 = 0;
 #ifdef HAVE_MENU
    bool all_users_control_menu         = settings->bools.input_all_users_control_menu;
    bool display_kb                     = menu_input_dialog_get_display_kb();
@@ -6877,7 +6880,19 @@ void input_driver_collect_system_input(input_driver_state_t *input_st,
       }
 #endif /* HAVE_MENU */
 
-      input_keys_pressed(port,
+      if (settings->bools.input_hotkey_follows_player1)
+      {
+         /* Hotkeys are bound to player 1 (the first user mapped to core port 0),
+          * even if player 1 is remapped to a different user. */
+         hotkey_port = settings->uints.input_remap_port_map[0][0];
+
+         if (hotkey_port >= MAX_USERS)
+            hotkey_port = 0;
+      }
+
+      input_keys_pressed(
+            port,
+            hotkey_port,
 #ifdef HAVE_MENU
             menu_is_alive,
 #else
